@@ -1,0 +1,122 @@
+---
+title: "hw5"
+author: "tianwei zhao"
+date: "11/19/2021"
+output: github_document
+---
+
+```{r}
+library(tidyverse)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+## Problem 1
+
+```{r}
+homicides_df = 
+  read_csv("./data/homicide-data.csv", na = c("", "Unknown")) %>% 
+  mutate(
+    city_state = str_c(city, state),
+    resolution = case_when(
+      disposition == "Closed without arrest" ~ "unsolved",
+      disposition == "Open/No arrest" ~ "unsolved",
+      disposition == "Closed by arrest" ~ "solved")
+    ) %>% 
+  relocate(city_state) %>% 
+  filter(city_state != "TulsaAL")
+```
+
+#### Describe the data
+
+This dataset consists of 52178 observations and 14 variables a tidying it up. Each row of the data is a reported homicide case, including record of the victim’s name, race/ethnicity, age, sex, location of the crime, and whether the crime was solved.
+
+
+#### Resolution of each City
+```{r}
+homicides_df %>% 
+  group_by(city_state) %>% 
+  summarize(
+    unsolved = sum(resolution == "unsolved"),
+    n = n()) 
+```
+
+#### Baltimore
+```{r}
+baltimore_df = 
+  homicides_df %>% 
+  filter(city_state == "BaltimoreMD")
+
+baltimore_summary = baltimore_df %>% 
+  summarize(
+    unsolved = sum(resolution == "unsolved"),
+    n = n())
+
+balimtore_test = 
+  prop.test(x = baltimore_summary %>% pull(unsolved), 
+            n = baltimore_summary %>% pull(n))
+
+balimtore_test %>% 
+  broom::tidy()
+```
+
+####For all Cities
+
+Function
+```{r}
+prop_test_function = function(city_df) {
+  city_summary = 
+    city_df %>% 
+    summarize(
+      unsolved = sum(resolution == "unsolved"),
+      n = n()
+    )
+  
+  city_test = 
+    prop.test(x = city_summary %>% pull(unsolved), 
+            n = city_summary %>% pull(n))
+  
+  return(city_test)
+}
+```
+
+Use the function and iterate across all cities
+
+```{r}
+results_df = 
+  homicides_df %>% 
+  nest(data = uid:resolution) %>% 
+  mutate(
+    test_results = map(data, prop_test_function),
+    tidy_results = map(test_results, broom::tidy)
+  ) %>% 
+  select(city_state, tidy_results) %>% 
+  unnest(tidy_results) %>% 
+  select(city_state, estimate, starts_with("conf"))
+
+results_df
+```
+
+
+#### plot
+
+```{r}
+results_df %>% 
+  mutate(city_state = fct_reorder(city_state, estimate)) %>% 
+  ggplot(aes(x = city_state, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.2, hjust = 1))
+```
+
