@@ -120,3 +120,89 @@ results_df %>%
   theme(axis.text.x = element_text(angle = 90, vjust = 0.2, hjust = 1))
 ```
 
+## Problem 2
+
+Tidy the Dataframe
+
+```{r}
+arm_df = 
+  #dataframe containing all file names
+  tibble(
+    file_name = list.files("data/pro2/data/")) %>% 
+  #Iterate over file names and read in data for each subject using map and saving the result as a new variable in the dataframe
+  mutate(
+    subject_data = map(str_c("data/pro2/data/",file_name), read_csv)) %>% 
+  #unnest the data for each subject
+  unnest(subject_data)
+
+#tidy the dataset 
+subject_df = 
+  arm_df %>% 
+    #manipulate file names to include control arm and subject ID
+    separate(file_name, into = c("arm", "id"), sep = "_") %>% 
+    #tidy the variable names
+    mutate(
+      id = str_replace(id,".csv","")
+    ) %>% 
+  #tidy data for each week
+    pivot_longer(
+      week_1:week_8,
+      names_to = "week",
+      names_prefix = "week_",
+      values_to = "observation"
+    ) %>% 
+  #assign appropriate classes to the variables
+  mutate(
+    arm = recode(arm, con = "control", exp = "experimental"),
+    arm = factor(arm),
+    id = factor(id),
+    week = as.integer(week)
+  )
+
+subject_df
+```
+
+Spaghetti plot
+
+```{r}
+subject_df %>% 
+  ggplot(aes(x = week, y = observation, group = id, color = id)) +
+  geom_point() +
+  geom_line() +
+  facet_grid(. ~ arm)
+```
+
+From the plots, we can observe that the observed data has no significant variation through the 8 weeks period for the control group. However, for the experimental group, there exists a positive trend for the observation value, indicating that there is a positive linear relationship.
+
+
+## Problem 3
+
+```{r}
+set.seed(10)
+
+iris_with_missing = iris %>% 
+  map_df(~replace(.x, sample(1:150, 20), NA)) %>%
+  mutate(Species = as.character(Species))
+```
+
+```{r}
+fill_na = function(vec){
+  
+  if (is.numeric(vec)) {
+    replace_na(vec, round(mean(vec, na.rm = TRUE),digits = 2))
+  }
+  
+  else if (is.character(vec)) {
+    replace_na(vec, "virginica")
+  }
+}
+```
+
+
+
+Use the map function to apply each element in the iris_with_missing dataframe to the fill_na function above. More specifically, use the map_dfr function to return a dataframe created by row-binding.
+
+```{r}
+map_dfr(iris_with_missing, fill_na)
+```
+
